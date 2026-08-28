@@ -823,19 +823,43 @@ function generate() {
 }
 
 /* ---------- sky ---------- */
+/* prerendered smooth sky: the mood's four colors become gradient stops,
+   interpolated per row, quantized to fine steps and Bayer-dithered so the
+   blend reads smooth while keeping a pixel texture */
+let skyCanvas = null, skyKey = '';
+const BAYER = [[0,8,2,10],[12,4,14,6],[3,11,1,9],[15,7,13,5]];
+function buildSky() {
+  const skyH = groundY + 6;
+  skyCanvas = document.createElement('canvas');
+  skyCanvas.width = vw; skyCanvas.height = skyH;
+  const g = skyCanvas.getContext('2d');
+  const stops = MOOD.bands.map(hexRGB);
+  const lerp = (A, B, t) => [0, 1, 2].map(i => A[i] + (B[i] - A[i]) * t);
+  const img = g.createImageData(vw, skyH);
+  const L = 8;                               // dither steps between stops
+  for (let y = 0; y < skyH; y++) {
+    const t = (skyH > 1 ? y / (skyH - 1) : 0) * 3;
+    const i = Math.min(2, Math.floor(t));
+    const q = (t - i) * L;
+    const qi = Math.floor(q), qf = q - qi;
+    const c0 = lerp(stops[i], stops[i + 1], qi / L);
+    const c1 = lerp(stops[i], stops[i + 1], Math.min(1, (qi + 1) / L));
+    for (let x = 0; x < vw; x++) {
+      const c = qf > (BAYER[y & 3][x & 3] + 0.5) / 16 ? c1 : c0;
+      const o = (y * vw + x) * 4;
+      img.data[o] = c[0]; img.data[o + 1] = c[1]; img.data[o + 2] = c[2];
+      img.data[o + 3] = 255;
+    }
+  }
+  g.putImageData(img, 0, 0);
+}
+
 function drawSky() {
   ctx.setTransform(Sx, 0, 0, Sy, 0, 0);
   const skyH = groundY + 6;
-  const bandH = Math.ceil(skyH / 4);
-  for (let i = 0; i < 4; i++) {
-    ctx.fillStyle = MOOD.bands[i];
-    ctx.fillRect(0, i * bandH, vw, bandH);
-  }
-  for (let i = 1; i < 4; i++) {              // dithered band edges
-    ctx.fillStyle = MOOD.bands[i - 1];
-    const y = i * bandH;
-    for (let x = (i % 2); x < vw; x += 2) ctx.fillRect(x, y, 1, 1);
-  }
+  const key = vw + 'x' + vh + MOOD.name;
+  if (skyKey !== key) { buildSky(); skyKey = key; }
+  ctx.drawImage(skyCanvas, 0, 0);
   for (const s of stars) {
     const a = 0.4 + 0.6 * Math.abs(Math.sin(now * 0.8 + s.tw));
     ctx.globalAlpha = a * (MOOD.name === 'night' ? 0.9 : 0.4);
