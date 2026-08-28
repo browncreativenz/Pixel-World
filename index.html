@@ -526,12 +526,11 @@ function drawFurniture(f, sx) {
     ctx.fillRect(sx - 1, f.y - f.th, 2, f.th);
     ctx.fillStyle = tinted('#3a3a40');
     ctx.fillRect(sx - 3, f.y - 1, 6, 1);               // tree pit grate
-    const sway = Math.round(Math.sin(now * 0.7 + f.tw));
     ctx.fillStyle = f.leaf2;
-    ctx.fillRect(sx - Math.floor(f.fw / 2) + sway, f.y - f.th - f.fh + 2, f.fw, f.fh - 2);
+    ctx.fillRect(sx - Math.floor(f.fw / 2), f.y - f.th - f.fh + 2, f.fw, f.fh - 2);
     ctx.fillStyle = f.leaf;
-    ctx.fillRect(sx - Math.floor(f.fw / 2) + 1 + sway, f.y - f.th - f.fh, f.fw - 2, f.fh - 2);
-    ctx.fillRect(sx - Math.floor(f.fw / 2) - 1 + sway, f.y - f.th - f.fh + 3, f.fw + 2, 3);
+    ctx.fillRect(sx - Math.floor(f.fw / 2) + 1, f.y - f.th - f.fh, f.fw - 2, f.fh - 2);
+    ctx.fillRect(sx - Math.floor(f.fw / 2) - 1, f.y - f.th - f.fh + 3, f.fw + 2, 3);
   } else if (f.kind === 'lamp') {
     ctx.fillStyle = tinted('#22301f');
     ctx.fillRect(sx, f.y - 24, 1, 24);
