@@ -100,19 +100,38 @@ function tinted(c) { return mix(c, MOOD.tint, MOOD.tintT); }
 /* ---------- canvas setup ---------- */
 const canvas = document.getElementById('world');
 const ctx = canvas.getContext('2d');
-let scale = 3, vw = 0, vh = 0, groundY = 0, curbY = 0;
+let scale = 3, dpr = 1, Sx = 3, Sy = 3, vw = 0, vh = 0, groundY = 0, curbY = 0;
 
+let lastW = 0, lastH = 0;
 function resize() {
   const cw = window.innerWidth, ch = window.innerHeight;
+  lastW = cw; lastH = ch;
+  dpr = window.devicePixelRatio || 1;
   scale = Math.max(2, Math.round(ch / 210));
   vw = Math.ceil(cw / scale);
   vh = Math.ceil(ch / scale);
-  canvas.width = vw;
-  canvas.height = vh;
+  // backing store at device resolution: the art stays chunky but the camera
+  // can move in device-pixel steps instead of whole art-pixel jumps
+  canvas.width = Math.round(vw * scale * dpr);
+  canvas.height = Math.round(vh * scale * dpr);
   canvas.style.width = (vw * scale) + 'px';
   canvas.style.height = (vh * scale) + 'px';
+  Sx = canvas.width / vw;
+  Sy = canvas.height / vh;
+  ctx.imageSmoothingEnabled = false;
   groundY = vh - 30;                    // sidewalk top / building bases
   curbY = vh - 14;                      // curb line, road below
+}
+
+/* set the transform for a parallax layer: integer part of the offset is
+   subtracted from world x by the caller, fractional part becomes a
+   sub-art-pixel translate so scrolling is smooth */
+let camS = 0;                           // integer camera offset for the main layer
+function setLayer(p) {
+  const off = camX * p;
+  const o = Math.floor(off);
+  ctx.setTransform(Sx, 0, 0, Sy, -Math.round((off - o) * Sx), 0);
+  return o;
 }
 
 /* ---------- world state ---------- */
@@ -258,7 +277,7 @@ function waterTower(g, cx, baseY) {
 function roofClutter(g, w, roofY) {
   const dark = tinted('#4a4a52');
   if (chance(.5)) { g.fillStyle = dark; g.fillRect(ri(2, Math.max(3, w - 8)), roofY - 3, ri(3, 5), 3); }
-  if (chance(.5)) { g.fillStyle = dark; const ax = ri(2, Math.max(3, w - 4)); g.fillRect(ax, roofY - 6, 1, 6); g.fillRect(ax - 1, roofY - 5, 3, 1); }
+  if (chance(.5)) { g.fillStyle = dark; const ax = ri(2, Math.max(3, w - 4)); g.fillRect(ax, roofY - 6, 1, 6); g.fillRect(ax - 1, roofY - 6, 3, 1); }
   if (chance(.4)) { g.fillStyle = tinted('#7d4a3a'); g.fillRect(ri(2, Math.max(3, w - 5)), roofY - 2, 2, 2); }
 }
 
@@ -571,7 +590,7 @@ function spawnSitters(x0, x1) {
 }
 
 function drawPerson(p) {
-  const sx = Math.round(p.x - camX);
+  const sx = Math.round(p.x) - camS;
   const y = Math.round(p.y);
   const d = p.dir || 1;
   if (p.state === 'sit') {                 // y = the step surface
@@ -717,7 +736,7 @@ function updatePigeons(dt) {
   pigeons = pigeons.filter(g => g.fly < 2 && g.x > camX - 60 && g.x < camX + vw + 60);
 }
 function drawPigeon(g) {
-  const sx = Math.round(g.x - camX), sy = Math.round(g.y);
+  const sx = Math.round(g.x) - camS, sy = Math.round(g.y);
   ctx.fillStyle = tinted('#6e7078');
   if (g.fly > 0) {
     const f = Math.floor(g.fly * 12) % 2;
@@ -751,7 +770,7 @@ function updateTaxis(dt) {
   taxis = taxis.filter(t => t.x > camX - 80 && t.x < camX + vw + 80);
 }
 function drawTaxi(t) {
-  const sx = Math.round(t.x - camX), y = Math.round(t.y);
+  const sx = Math.round(t.x) - camS, y = Math.round(t.y);
   ctx.fillStyle = tinted(t.c);
   ctx.fillRect(sx - 7, y - 4, 14, 3);
   ctx.fillRect(sx - 4, y - 6, 8, 2);
@@ -823,6 +842,7 @@ function generate() {
 
 /* ---------- sky ---------- */
 function drawSky() {
+  ctx.setTransform(Sx, 0, 0, Sy, 0, 0);
   const skyH = groundY + 6;
   const bandH = Math.ceil(skyH / 4);
   for (let i = 0; i < 4; i++) {
@@ -869,38 +889,38 @@ function drawSky() {
 /* ---------- street ---------- */
 function drawStreet() {
   ctx.fillStyle = tinted('#9aa0a0');
-  ctx.fillRect(0, groundY, vw, curbY - groundY);
+  ctx.fillRect(-2, groundY, vw + 4, curbY - groundY);
   ctx.fillStyle = tinted('#8a9090');
-  const joint0 = Math.floor(camX / 14) * 14;
-  for (let wx = joint0; wx < camX + vw + 14; wx += 14) {          // pavement joints
-    ctx.fillRect(Math.round(wx - camX), groundY, 1, curbY - groundY);
+  const joint0 = Math.floor(camS / 14) * 14;
+  for (let wx = joint0; wx < camS + vw + 14; wx += 14) {          // pavement joints
+    ctx.fillRect(wx - camS, groundY, 1, curbY - groundY);
   }
   ctx.fillStyle = tinted('#b5baba');
-  ctx.fillRect(0, groundY, vw, 1);
+  ctx.fillRect(-2, groundY, vw + 4, 1);
   ctx.fillStyle = tinted('#70767a');
-  ctx.fillRect(0, curbY, vw, 2);
+  ctx.fillRect(-2, curbY, vw + 4, 2);
   ctx.fillStyle = tinted('#3c4046');
-  ctx.fillRect(0, curbY + 2, vw, vh - curbY - 2);
+  ctx.fillRect(-2, curbY + 2, vw + 4, vh - curbY - 2);
   // asphalt patches, hashed off world position so they stay put
   ctx.fillStyle = tinted('#33373c');
-  const p0 = Math.floor(camX / 9) * 9;
-  for (let wx = p0; wx < camX + vw + 9; wx += 9) {
+  const p0 = Math.floor(camS / 9) * 9;
+  for (let wx = p0; wx < camS + vw + 9; wx += 9) {
     const hsh = (Math.imul(wx | 0, 2654435761) >>> 0) % 100;
     if (hsh < 45) {
-      ctx.fillRect(Math.round(wx - camX), curbY + 3 + hsh % Math.max(1, vh - curbY - 5), 3, 1);
+      ctx.fillRect(wx - camS, curbY + 3 + hsh % Math.max(1, vh - curbY - 5), 3, 1);
     }
   }
   ctx.fillStyle = tinted('#c9c452');
   const laneY = Math.floor((curbY + 2 + vh) / 2);
-  const d0 = Math.floor(camX / 12) * 12;
-  for (let wx = d0; wx < camX + vw + 12; wx += 12) {
-    ctx.fillRect(Math.round(wx - camX), laneY, 5, 1);
+  const d0 = Math.floor(camS / 12) * 12;
+  for (let wx = d0; wx < camS + vw + 12; wx += 12) {
+    ctx.fillRect(wx - camS, laneY, 5, 1);
   }
   ctx.fillStyle = tinted('#c8cccc');
   const cwPeriod = 180;
-  let cwx = Math.floor(camX / cwPeriod) * cwPeriod;
+  let cwx = Math.floor(camS / cwPeriod) * cwPeriod;
   for (let k = 0; k < 3; k++, cwx += cwPeriod) {
-    const sx = Math.round(cwx - camX);
+    const sx = cwx - camS;
     if (sx > -20 && sx < vw + 20) {
       for (let sy = curbY + 3; sy < vh - 1; sy += 3) ctx.fillRect(sx, sy, 12, 2);
     }
@@ -937,6 +957,10 @@ function frame(ts) {
   last = ts;
   now += dt;
 
+  // mobile browsers resize the viewport without always firing resize
+  // (address bar collapse, orientation settle) — catch it here
+  if (window.innerWidth !== lastW || window.innerHeight !== lastH) resize();
+
   if (!dragging) {
     if (Math.abs(dragVel) > 0.15) {          // fling momentum, easing back to the stroll
       camX = Math.max(camX + dragVel, maxCam - vw * 1.2);
@@ -956,19 +980,20 @@ function frame(ts) {
 
   drawSky();
 
-  let off = camX * 0.25;
+  let off = setLayer(0.25);
   for (const b of farBldgs) {
-    const sx = Math.round(b.x - off);
-    if (sx + b.w > 0 && sx < vw) ctx.drawImage(b.canvas, sx, b.top + 4);
+    const sx = b.x - off;
+    if (sx + b.w > -1 && sx < vw + 2) ctx.drawImage(b.canvas, sx, b.top + 4);
   }
-  off = camX * 0.55;
+  off = setLayer(0.55);
   for (const b of midBldgs) {
-    const sx = Math.round(b.x - off);
-    if (sx + b.w > 0 && sx < vw) ctx.drawImage(b.canvas, sx, b.top + 2);
+    const sx = b.x - off;
+    if (sx + b.w > -1 && sx < vw + 2) ctx.drawImage(b.canvas, sx, b.top + 2);
   }
+  camS = setLayer(1);
   for (const b of buildings) {
-    const sx = Math.round(b.x - camX);
-    if (sx + b.w > 0 && sx < vw) ctx.drawImage(b.canvas, sx, b.top);
+    const sx = b.x - camS;
+    if (sx + b.w > -1 && sx < vw + 2) ctx.drawImage(b.canvas, sx, b.top);
   }
 
   drawStreet();
@@ -976,14 +1001,14 @@ function frame(ts) {
   // painter-sort sidewalk life by depth
   const drawables = [];
   for (const f of furniture) {
-    const sx = Math.round(f.x - camX);
+    const sx = f.x - camS;
     if (sx > -20 && sx < vw + 20) drawables.push({ y: f.y, fn: () => drawFurniture(f, sx) });
   }
   for (const p of people) {
-    if (p.x - camX > -20 && p.x - camX < vw + 20) drawables.push({ y: p.y, fn: () => drawPerson(p) });
+    if (p.x - camS > -20 && p.x - camS < vw + 20) drawables.push({ y: p.y, fn: () => drawPerson(p) });
   }
   for (const g of pigeons) {
-    if (g.x - camX > -10 && g.x - camX < vw + 10) drawables.push({ y: g.y, fn: () => drawPigeon(g) });
+    if (g.x - camS > -10 && g.x - camS < vw + 10) drawables.push({ y: g.y, fn: () => drawPigeon(g) });
   }
   drawables.sort((a, b) => a.y - b.y);
   for (const d of drawables) d.fn();
@@ -994,7 +1019,7 @@ function frame(ts) {
     ctx.globalAlpha = Math.max(0, s.a);
     ctx.fillStyle = MOOD.name === 'day' ? '#eef2f2' : '#aab0c8';
     const r = Math.round(s.r);
-    ctx.fillRect(Math.round(s.x - camX) - r, Math.round(s.y) - r, r * 2, r * 2);
+    ctx.fillRect(Math.round(s.x) - camS - r, Math.round(s.y) - r, r * 2, r * 2);
   }
   ctx.globalAlpha = 1;
 }
