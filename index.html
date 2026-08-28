@@ -144,12 +144,10 @@ let furniture = [];
 let sitSpots = [];
 let people = [];
 let pigeons = [];
-let taxis = [];
 let clouds = [];
 let stars = [];
 let steam = [];
 let genX = 0, midGenX = 0, farGenX = 0;
-let taxiTimer = 3;
 let peopleTimer = 1;
 
 function newCity() {
@@ -161,9 +159,9 @@ function newCity() {
   for (const m of MOODS) { roll -= m.w; if (roll <= 0) { MOOD = m; break; } }
   camX = 0; maxCam = 0;
   buildings = []; midBldgs = []; farBldgs = [];
-  furniture = []; sitSpots = []; people = []; pigeons = []; taxis = []; steam = [];
+  furniture = []; sitSpots = []; people = []; pigeons = []; steam = [];
   genX = -40; midGenX = -40; farGenX = -40;
-  taxiTimer = rf(2, 6); peopleTimer = 0.5;
+  peopleTimer = 0.5;
   clouds = [];
   const nClouds = ri(3, 6);
   for (let i = 0; i < nClouds; i++) {
@@ -181,17 +179,40 @@ function newCity() {
 }
 
 /* ---------- sprite helpers ---------- */
+/* puffy cumulus: a union of round lobes anchored to a flat base,
+   lit on top with a shaded underside */
 function makeCloud() {
-  const w = ri(18, 34), h = ri(6, 10);
+  const w = ri(26, 46), h = ri(9, 14);
   const c = document.createElement('canvas');
   c.width = w; c.height = h;
   const g = c.getContext('2d');
-  g.fillStyle = MOOD.cloud;
-  g.globalAlpha = MOOD.name === 'day' ? 0.85 : 0.5;
+  const lobes = [];
   const n = ri(3, 5);
   for (let i = 0; i < n; i++) {
-    const bw = ri(8, w - 4), bh = ri(3, h - 2);
-    g.fillRect(ri(0, w - bw), h - bh, bw, bh);
+    const r = rf(h * 0.38, h * 0.72);
+    lobes.push({ x: rf(r * 0.8, w - r * 0.8), y: h - 1 - r * 0.25, r });
+  }
+  lobes.push({ x: w * rf(0.4, 0.6), y: h - 1, r: w * 0.3 });   // wide base lobe
+  const main = MOOD.cloud;
+  const under = mix(MOOD.cloud, MOOD.bands[1], 0.5);
+  const glow = mix(MOOD.cloud, '#ffffff', MOOD.name === 'day' ? 0.6 : 0.18);
+  g.globalAlpha = MOOD.name === 'day' ? 0.95 : (MOOD.name === 'night' ? 0.55 : 0.8);
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      let hit = null;
+      for (const L of lobes) {
+        const dx = x - L.x, dy = (y - L.y) * 1.2;
+        if (dx * dx + dy * dy < L.r * L.r) {
+          // top edge of a lobe catches the light
+          if (!hit && dx * dx + dy * dy > L.r * L.r * 0.55 && y < L.y - L.r * 0.3) hit = 'glow';
+          else hit = 'main';
+          if (hit === 'main') break;
+        }
+      }
+      if (!hit) continue;
+      g.fillStyle = y >= h - 2 ? under : (hit === 'glow' ? glow : main);
+      g.fillRect(x, y, 1, 1);
+    }
   }
   return c;
 }
@@ -751,44 +772,6 @@ function drawPigeon(g) {
   }
 }
 
-/* ---------- traffic ---------- */
-function updateTaxis(dt) {
-  taxiTimer -= dt;
-  if (taxiTimer <= 0) {
-    taxiTimer = rf(5, 14);
-    const dir = chance(.6) ? 1 : -1;
-    const yellow = chance(.7);
-    taxis.push({
-      x: dir > 0 ? camX - 30 : camX + vw + 30,
-      dir, v: rf(34, 55),
-      y: vh - (dir > 0 ? 9 : 4),
-      c: yellow ? '#f7c948' : pick(['#b8bec4','#3a3f4a','#7a2f2b','#2b4a73','#40525f']),
-      taxi: yellow,
-    });
-  }
-  for (const t of taxis) t.x += t.dir * t.v * dt;
-  taxis = taxis.filter(t => t.x > camX - 80 && t.x < camX + vw + 80);
-}
-function drawTaxi(t) {
-  const sx = Math.round(t.x) - camS, y = Math.round(t.y);
-  ctx.fillStyle = tinted(t.c);
-  ctx.fillRect(sx - 7, y - 4, 14, 3);
-  ctx.fillRect(sx - 4, y - 6, 8, 2);
-  ctx.fillStyle = tinted('#26303a');
-  ctx.fillRect(sx - 3, y - 6, 3, 2); ctx.fillRect(sx + 1, y - 6, 2, 2);
-  ctx.fillStyle = '#1d1d1d';
-  ctx.fillRect(sx - 5, y - 1, 2, 1); ctx.fillRect(sx + 3, y - 1, 2, 1);
-  if (t.taxi) {
-    ctx.fillStyle = '#1d1d1d';
-    for (let cx2 = -6; cx2 <= 4; cx2 += 2) ctx.fillRect(sx + cx2, y - 3, 1, 1);   // checker band
-    ctx.fillStyle = '#ffffff'; ctx.fillRect(sx - 1, y - 7, 2, 1);                 // roof light
-  }
-  if (MOOD.lampGlow > 0.5) {
-    ctx.fillStyle = '#ffe9a3'; ctx.fillRect(sx + t.dir * 7, y - 3, 1, 1);
-    ctx.fillStyle = '#c33d2e'; ctx.fillRect(sx - t.dir * 7, y - 3, 1, 1);
-  }
-}
-
 /* ---------- steam ---------- */
 function updateSteam(dt) {
   for (const f of furniture) {
@@ -974,7 +957,6 @@ function frame(ts) {
   generate();
   updatePeople(dt);
   updatePigeons(dt);
-  updateTaxis(dt);
   updateSteam(dt);
   for (const cl of clouds) cl.x += cl.v * dt;
 
@@ -1012,8 +994,6 @@ function frame(ts) {
   }
   drawables.sort((a, b) => a.y - b.y);
   for (const d of drawables) d.fn();
-
-  for (const t of taxis) drawTaxi(t);
 
   for (const s of steam) {
     ctx.globalAlpha = Math.max(0, s.a);
