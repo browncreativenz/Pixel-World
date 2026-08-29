@@ -846,7 +846,7 @@ let flickerT = 2;
 function updateLights(dt) {
   flickerT -= dt;
   if (flickerT > 0) return;
-  flickerT = 0.4 + Math.random() * 1.1;
+  flickerT = 3 + Math.random() * 6;
   // pick a visible building — mostly the main street, sometimes a mid-layer tower
   let pool;
   if (Math.random() < 0.3 && MOOD.lit > 0.1) {
