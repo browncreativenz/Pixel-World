@@ -258,11 +258,14 @@ const TRIMS = ['#e8ddc8','#d9cdb4','#cfc2a8'];
 const AWNINGS = [['#356e4a','#e8e2d0'],['#8a2f2b','#e8e2d0'],['#2b4a73','#e8e2d0'],['#5a3a78','#d9cdb4'],['#8a6a1f','#efe8d5']];
 const SIGNS = ['#c33d2e','#2b6e4f','#274b7a','#8a6a1f','#7a2f68','#1f6e6a'];
 
-/* shared window renderer */
+/* shared window renderer — returns the window records so lights can be
+   toggled later; `ok:false` marks windows overdrawn by an AC unit or
+   planter, which a repaint would erase */
 function windows(g, x0, y0, cols, rows, colW, rowH, winW, winH, opts) {
   const o = opts || {};
   const glass = tinted(o.glass || (MOOD.name === 'day' ? '#3d5a70' : '#20283d'));
   const lit1 = '#f7d98a', lit2 = '#e8b45a';
+  const wins = [];
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
       const wx = x0 + c * colW, wy = y0 + r * rowH;
@@ -279,17 +282,22 @@ function windows(g, x0, y0, cols, rows, colW, rowH, winW, winH, opts) {
       }
       if (o.sills) { g.fillStyle = o.sills; g.fillRect(wx - 1, wy + winH, winW + 2, 1); }
       if (o.lintels) { g.fillStyle = o.lintels; g.fillRect(wx - 1, wy - 1, winW + 2, 1); }
+      let blocked = false;
       if (chance(0.10)) {
         g.fillStyle = tinted('#9aa0a8');               // AC unit
         g.fillRect(wx + Math.floor((winW - 2) / 2), wy + winH - 2, 2, 2);
+        blocked = true;
       } else if (o.planters && chance(0.12)) {         // flower box on the sill
         g.fillStyle = tinted('#3f7d3a');
         g.fillRect(wx, wy + winH - 1, winW, 1);
         g.fillStyle = tinted(pick(['#c33d2e','#d96a8a','#e8b45a']));
         g.fillRect(wx + ri(0, winW - 1), wy + winH - 2, 1, 1);
+        blocked = true;
       }
+      wins.push({ x: wx, y: wy, w: winW, h: winH, lit: isLit, off: glass, on: null, ok: !blocked });
     }
   }
+  return wins;
 }
 
 function fireEscape(g, x, yTop, floors, floorH, w) {
@@ -377,7 +385,7 @@ function brownstone(x) {
   cornice(g, 0, w, 0, trim);
   const cols = Math.max(2, Math.floor((w - 10) / 7));
   const x0 = Math.floor((w - (cols * 7 - 3)) / 2);
-  windows(g, x0, 7, cols, floors - 1, 7, floorH, 4, 6, { sills: trim, planters: true });
+  const wins = windows(g, x0, 7, cols, floors - 1, 7, floorH, 4, 6, { sills: trim, planters: true });
   // raised parlor door + stoop
   const doorX = chance(.5) ? 3 : w - 8;
   const doorY = h - floorH - 2;
@@ -385,7 +393,7 @@ function brownstone(x) {
   g.fillStyle = tinted(pick(['#3a2a1e','#4a2222','#22303a','#2a3a26']));
   g.fillRect(doorX, doorY, 5, 9);
   if (chance(.6)) { g.fillStyle = '#f7d98a'; g.fillRect(doorX + 2, doorY + 1, 1, 1); }
-  windows(g, doorX < w / 2 ? doorX + 9 : 4, doorY, Math.max(1, cols - 1), 1, 7, floorH, 4, 6, { sills: trim });
+  wins.push(...windows(g, doorX < w / 2 ? doorX + 9 : 4, doorY, Math.max(1, cols - 1), 1, 7, floorH, 4, 6, { sills: trim }));
   // stoop steps descending onto the sidewalk
   const stoopX = doorX - 1;
   const steps = 4;
@@ -401,7 +409,7 @@ function brownstone(x) {
   for (let s = 0; s < steps; s += 2) {
     sitSpots.push({ x: x + stoopX + 2 + ri(0, 3), y: groundY - h + seatYs[s], taken: false });
   }
-  return { x, w, canvas: c, top: groundY - h - BHEAD };
+  return { x, w, canvas: c, top: groundY - h - BHEAD, wins };
 }
 
 function tenement(x) {
@@ -424,15 +432,18 @@ function tenement(x) {
   cornice(g, 0, w, 0, trim);
   const cols = Math.max(2, Math.floor((w - 8) / 7));
   const x0 = Math.floor((w - (cols * 7 - 3)) / 2);
-  windows(g, x0, 6, cols, floors - 1, 7, floorH, 4, 6, { lintels: trim, sills: shade(wall, -0.2), planters: true });
+  let wins = windows(g, x0, 6, cols, floors - 1, 7, floorH, 4, 6, { lintels: trim, sills: shade(wall, -0.2), planters: true });
   const doorX = Math.floor(w / 2) - 3;
   g.fillStyle = trim; g.fillRect(doorX - 1, h - 12, 8, 12);
   g.fillStyle = tinted('#33272b'); g.fillRect(doorX, h - 11, 6, 11);
   if (chance(MOOD.lit + .3)) { g.fillStyle = '#f7d98a'; g.fillRect(doorX + 2, h - 10, 2, 1); }
-  fireEscape(g, x0 + 1, 6, floors - 1, floorH, Math.min(w - x0 * 2 - 2, cols * 7 - 5));
+  const fex = x0 + 1, few = Math.min(w - x0 * 2 - 2, cols * 7 - 5);
+  fireEscape(g, fex, 6, floors - 1, floorH, few);
+  // windows behind the fire escape can't be repainted without erasing it
+  wins = wins.filter(W => W.x + W.w < fex || W.x > fex + few);
   if (chance(.55) && floors >= 5) waterTower(g, ri(7, w - 7), 0);
   else roofClutter(g, w, 0);
-  return { x, w, canvas: c, top: groundY - h - BHEAD };
+  return { x, w, canvas: c, top: groundY - h - BHEAD, wins };
 }
 
 function retail(x) {
@@ -454,7 +465,7 @@ function retail(x) {
   cornice(g, 0, w, 0, trim);
   const cols = Math.max(2, Math.floor((w - 8) / 7));
   const x0 = Math.floor((w - (cols * 7 - 3)) / 2);
-  windows(g, x0, 6, cols, floors - 1, 7, floorH, 4, 6, { sills: trim, planters: true });
+  const wins = windows(g, x0, 6, cols, floors - 1, 7, floorH, 4, 6, { sills: trim, planters: true });
   // storefront
   const sy = h - shopH;
   const signC = pick(SIGNS);
@@ -485,7 +496,7 @@ function retail(x) {
   }
   if (chance(.3) && floors >= 5) waterTower(g, ri(7, w - 7), 0);
   else roofClutter(g, w, 0);
-  return { x, w, canvas: c, top: groundY - h - BHEAD };
+  return { x, w, canvas: c, top: groundY - h - BHEAD, wins };
 }
 
 function tower(x) {
@@ -507,7 +518,7 @@ function tower(x) {
   const cols = Math.max(3, Math.floor((w - 8) / 6));
   const x0 = Math.floor((w - (cols * 6 - 2)) / 2);
   const rows = Math.floor((h - 25) / floorH);
-  windows(g, x0, 12, cols, rows, 6, floorH, 4, 5, {});
+  const wins = windows(g, x0, 12, cols, rows, 6, floorH, 4, 5, {});
   // stone base + canopied entrance
   g.fillStyle = baseC; g.fillRect(0, h - 12, w, 12);
   g.fillStyle = trim; g.fillRect(0, h - 12, w, 1);
@@ -519,10 +530,10 @@ function tower(x) {
     g.fillRect(doorX + 1, h - 9, 2, 2); g.fillRect(doorX + 5, h - 9, 2, 2);
   }
   g.fillStyle = tinted('#2e4a3a'); g.fillRect(doorX - 2, h - 12, 12, 2);
-  windows(g, 3, h - 10, 2, 1, 6, 9, 4, 5, {});
-  windows(g, w - 12, h - 10, 2, 1, 6, 9, 4, 5, {});
+  wins.push(...windows(g, 3, h - 10, 2, 1, 6, 9, 4, 5, {}));
+  wins.push(...windows(g, w - 12, h - 10, 2, 1, 6, 9, 4, 5, {}));
   waterTower(g, ri(9, w - 9), 0);
-  return { x, w, canvas: c, top: groundY - h - BHEAD };
+  return { x, w, canvas: c, top: groundY - h - BHEAD, wins };
 }
 
 /* ---------- parallax silhouettes ---------- */
@@ -544,14 +555,21 @@ function makeSilhouette(x, layer) {
     g.fillRect(cx - 2, 1, 4, 4);
     g.fillRect(cx - 1, 0, 2, 1);
   }
+  const ret = { x, w, canvas: c, top: groundY - h };
   if (!far) {
-    g.fillStyle = MOOD.name === 'day' ? shade(col, 0.15) : '#d8b46a';
+    const litC = MOOD.name === 'day' ? shade(col, 0.15) : '#d8b46a';
     const prob = MOOD.name === 'day' ? 0.1 : MOOD.lit * 0.8;
-    for (let wy = 9; wy < h - 4; wy += 6)
-      for (let wx = 2; wx < w - 3; wx += 5)
-        if (chance(prob)) g.fillRect(wx, wy, 2, 2);
+    g.fillStyle = litC;
+    ret.wins = [];
+    for (let wy = 9; wy < h - 4; wy += 6) {
+      for (let wx = 2; wx < w - 3; wx += 5) {
+        const lit = chance(prob);
+        if (lit) g.fillRect(wx, wy, 2, 2);
+        ret.wins.push({ x: wx, y: wy, w: 2, h: 2, lit, on: litC, off: col, ok: true });
+      }
+    }
   }
-  return { x, w, canvas: c, top: groundY - h };
+  return ret;
 }
 
 /* ---------- street furniture ---------- */
@@ -823,6 +841,37 @@ function drawPigeon(g) {
   }
 }
 
+/* ---------- window lights turning on and off ---------- */
+let flickerT = 2;
+function updateLights(dt) {
+  flickerT -= dt;
+  if (flickerT > 0) return;
+  flickerT = 0.4 + Math.random() * 1.1;
+  // pick a visible building — mostly the main street, sometimes a mid-layer tower
+  let pool;
+  if (Math.random() < 0.3 && MOOD.lit > 0.1) {
+    const off = Math.floor(camX * 0.55);
+    pool = midBldgs.filter(b => b.wins && b.x + b.w > off && b.x < off + vw);
+  } else {
+    pool = buildings.filter(b => b.wins && b.x + b.w > camX && b.x < camX + vw);
+  }
+  if (!pool.length) return;
+  const b = pool[(Math.random() * pool.length) | 0];
+  const cand = b.wins.filter(W => W.ok);
+  if (!cand.length) return;
+  const W = cand[(Math.random() * cand.length) | 0];
+  W.lit = !W.lit;
+  // the sprite's context keeps the transform it was prerendered with,
+  // so the recorded coordinates repaint in place
+  const g = b.canvas.getContext('2d');
+  g.fillStyle = W.lit ? (W.on || (Math.random() < .5 ? '#f7d98a' : '#e8b45a')) : W.off;
+  g.fillRect(W.x, W.y, W.w, W.h);
+  if (!W.lit && !W.on) {                       // restore the sky glint on main-street glass
+    g.fillStyle = 'rgba(255,255,255,0.18)';
+    g.fillRect(W.x, W.y, 1, W.h - 1);
+  }
+}
+
 /* ---------- steam ---------- */
 function updateSteam(dt) {
   for (const f of furniture) {
@@ -1037,6 +1086,7 @@ function frame(ts) {
   updatePeople(dt);
   updatePigeons(dt);
   updateSteam(dt);
+  updateLights(dt);
   for (const cl of clouds) cl.x += cl.v * dt;
 
   drawSky();
