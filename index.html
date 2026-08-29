@@ -18,23 +18,6 @@
     position: absolute;
     top: 0; left: 0;
   }
-  #chip {
-    position: fixed;
-    top: max(10px, env(safe-area-inset-top));
-    left: 12px;
-    color: #fff;
-    background: rgba(10, 12, 30, 0.55);
-    border: 2px solid rgba(255,255,255,0.35);
-    padding: 8px 10px 7px;
-    font-size: 9px;
-    letter-spacing: 1px;
-    line-height: 1.7;
-    pointer-events: none;
-    transition: opacity 1.4s ease;
-    text-shadow: 1px 1px 0 #000;
-  }
-  #chip small { display: block; font-size: 6px; opacity: .75; letter-spacing: 1px; }
-  #chip.gone { opacity: 0; }
   #reroll {
     position: fixed;
     right: 12px;
@@ -54,7 +37,6 @@
 </style>
 
 <canvas id="world" aria-label="A generative pixel-art Manhattan street scene, slowly scrolling past brownstones, shops and people"></canvas>
-<div id="chip">PIXEL MANHATTAN<small id="chipsub">a little generative city</small></div>
 <button id="reroll" title="Generate a new city" aria-label="Generate a new city">&#8635;</button>
 
 <script>
@@ -187,11 +169,6 @@ function newCity() {
   if (MOOD.name === 'night' || MOOD.name === 'dusk') {
     for (let i = 0; i < 70; i++) stars.push({ x: rf(0, 1), y: rf(0, 0.8), tw: rf(0, 6.28) });
   }
-  document.getElementById('chipsub').textContent = MOOD.name + ' · block ' + (seed % 900 + 100);
-  const chip = document.getElementById('chip');
-  chip.classList.remove('gone');
-  clearTimeout(newCity._t);
-  newCity._t = setTimeout(() => chip.classList.add('gone'), 5000);
 }
 
 /* ---------- sprite helpers ---------- */
