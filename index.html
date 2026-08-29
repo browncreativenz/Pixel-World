@@ -219,7 +219,24 @@ function makeCloud() {
 
 /* ---------- building palettes ---------- */
 const BRICKS = ['#9e4b3b','#a85543','#8a4034','#b06a4c','#7d4a3a','#93564a','#a06054'];
+/* East Village painted brick: [wall, trim] pairs with deliberate contrast */
+const PAINTED = [
+  ['#ddd6c9','#2e2e33'],   // whitewashed, black iron trim
+  ['#b0413a','#e8e0d0'],   // painted red, white surrounds
+  ['#cf6a4a','#efe6d2'],   // coral
+  ['#d6936f','#efe6d2'],   // salmon orange
+  ['#e3d2a4','#3f8a76'],   // cream, teal surrounds
+  ['#e3d2a4','#2b2b30'],   // cream, black cornice
+  ['#c9b28a','#2f6e4f'],   // tan, deep green
+  ['#9db89b','#efe6d2'],   // sage, white
+];
 const BROWNSTONES = ['#7a5546','#6e4b3e','#835c4a','#715043','#8a6350'];
+const BROWNSTONE_PAINTED = [
+  ['#ddd6c9','#4a4a50'],   // white row house, dark trim
+  ['#b0413a','#e8e0d0'],   // red with white
+  ['#d9b98a','#6e4b3e'],   // buff with brown
+  ['#98a892','#e8e4d8'],   // sage with cream
+];
 const STONES = ['#c9b28a','#bfae93','#b8a582','#cbbc9c','#a99878'];
 const TRIMS = ['#e8ddc8','#d9cdb4','#cfc2a8'];
 const AWNINGS = [['#356e4a','#e8e2d0'],['#8a2f2b','#e8e2d0'],['#2b4a73','#e8e2d0'],['#5a3a78','#d9cdb4'],['#8a6a1f','#efe8d5']];
@@ -249,6 +266,11 @@ function windows(g, x0, y0, cols, rows, colW, rowH, winW, winH, opts) {
       if (chance(0.10)) {
         g.fillStyle = tinted('#9aa0a8');               // AC unit
         g.fillRect(wx + Math.floor((winW - 2) / 2), wy + winH - 2, 2, 2);
+      } else if (o.planters && chance(0.12)) {         // flower box on the sill
+        g.fillStyle = tinted('#3f7d3a');
+        g.fillRect(wx, wy + winH - 1, winW, 1);
+        g.fillStyle = tinted(pick(['#c33d2e','#d96a8a','#e8b45a']));
+        g.fillRect(wx + ri(0, winW - 1), wy + winH - 2, 1, 1);
       }
     }
   }
@@ -327,14 +349,19 @@ function brownstone(x) {
   const floorH = 11;
   const h = floors * floorH + 6;
   const { c, g } = buildingBase(w, h);
-  const wall = tinted(pick(BROWNSTONES));
-  const trim = tinted(shade(wall, 0.22));
+  let wall, trim;
+  if (chance(.3)) {
+    const combo = pick(BROWNSTONE_PAINTED);
+    wall = tinted(combo[0]); trim = tinted(combo[1]);
+  } else {
+    wall = tinted(pick(BROWNSTONES)); trim = tinted(shade(wall, 0.22));
+  }
   g.fillStyle = wall; g.fillRect(0, 0, w, h);
   g.fillStyle = shade(wall, -0.18); g.fillRect(w - 1, 0, 1, h);
   cornice(g, 0, w, 0, trim);
   const cols = Math.max(2, Math.floor((w - 10) / 7));
   const x0 = Math.floor((w - (cols * 7 - 3)) / 2);
-  windows(g, x0, 7, cols, floors - 1, 7, floorH, 4, 6, { sills: trim });
+  windows(g, x0, 7, cols, floors - 1, 7, floorH, 4, 6, { sills: trim, planters: true });
   // raised parlor door + stoop
   const doorX = chance(.5) ? 3 : w - 8;
   const doorY = h - floorH - 2;
@@ -367,8 +394,13 @@ function tenement(x) {
   const floorH = 10;
   const h = floors * floorH + 5;
   const { c, g } = buildingBase(w, h);
-  const wall = tinted(pick(BRICKS));
-  const trim = tinted(pick(TRIMS));
+  let wall, trim;
+  if (chance(.45)) {
+    const combo = pick(PAINTED);
+    wall = tinted(combo[0]); trim = tinted(combo[1]);
+  } else {
+    wall = tinted(pick(BRICKS)); trim = tinted(pick(TRIMS));
+  }
   g.fillStyle = wall; g.fillRect(0, 0, w, h);
   g.fillStyle = shade(wall, -0.15); g.fillRect(w - 1, 0, 1, h);
   g.fillStyle = shade(wall, -0.1);
@@ -376,7 +408,7 @@ function tenement(x) {
   cornice(g, 0, w, 0, trim);
   const cols = Math.max(2, Math.floor((w - 8) / 7));
   const x0 = Math.floor((w - (cols * 7 - 3)) / 2);
-  windows(g, x0, 6, cols, floors - 1, 7, floorH, 4, 6, { lintels: trim, sills: shade(wall, -0.2) });
+  windows(g, x0, 6, cols, floors - 1, 7, floorH, 4, 6, { lintels: trim, sills: shade(wall, -0.2), planters: true });
   const doorX = Math.floor(w / 2) - 3;
   g.fillStyle = trim; g.fillRect(doorX - 1, h - 12, 8, 12);
   g.fillStyle = tinted('#33272b'); g.fillRect(doorX, h - 11, 6, 11);
@@ -394,14 +426,19 @@ function retail(x) {
   const shopH = 13;
   const h = (floors - 1) * floorH + shopH + 4;
   const { c, g } = buildingBase(w, h);
-  const wall = tinted(pick(chance(.5) ? BRICKS : STONES));
-  const trim = tinted(pick(TRIMS));
+  let wall, trim;
+  if (chance(.35)) {
+    const combo = pick(PAINTED);
+    wall = tinted(combo[0]); trim = tinted(combo[1]);
+  } else {
+    wall = tinted(pick(chance(.5) ? BRICKS : STONES)); trim = tinted(pick(TRIMS));
+  }
   g.fillStyle = wall; g.fillRect(0, 0, w, h);
   g.fillStyle = shade(wall, -0.15); g.fillRect(w - 1, 0, 1, h);
   cornice(g, 0, w, 0, trim);
   const cols = Math.max(2, Math.floor((w - 8) / 7));
   const x0 = Math.floor((w - (cols * 7 - 3)) / 2);
-  windows(g, x0, 6, cols, floors - 1, 7, floorH, 4, 6, { sills: trim });
+  windows(g, x0, 6, cols, floors - 1, 7, floorH, 4, 6, { sills: trim, planters: true });
   // storefront
   const sy = h - shopH;
   const signC = pick(SIGNS);
