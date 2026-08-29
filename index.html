@@ -705,7 +705,8 @@ function drawPerson(p) {
   ctx.fillRect(sx + Math.round(-stride * 0.5), y - 2, 1, 2);
   ctx.fillRect(sx - 1, y - 5, 3, 3);       // hips
   ctx.fillStyle = p.shirt;
-  ctx.fillRect(sx - 1, top + 3, 3, p.h - 8);
+  // stretch the torso by the bob offset so it always meets the hips
+  ctx.fillRect(sx - 1, top + 3, 3, p.h - 8 - bob);
   ctx.fillStyle = shade(p.shirt, -0.18);
   ctx.fillRect(sx + Math.round(-stride * 0.4), top + 4, 1, 3);      // arm
   ctx.fillStyle = p.skin;
