@@ -104,6 +104,7 @@ let scale = 3, dpr = 1, Sx = 3, Sy = 3, vw = 0, vh = 0, groundY = 0, curbY = 0;
 
 let lastW = 0, lastH = 0;
 function resize() {
+  const oldVh = vh;
   const cw = window.innerWidth, ch = window.innerHeight;
   lastW = cw; lastH = ch;
   dpr = window.devicePixelRatio || 1;
@@ -121,6 +122,19 @@ function resize() {
   ctx.imageSmoothingEnabled = false;
   groundY = vh - 30;                    // sidewalk top / building bases
   curbY = vh - 14;                      // curb line, road below
+  // existing scenery stores absolute y positions — keep it anchored to the
+  // street when the viewport height changes (rotation, address bar)
+  const dy = oldVh ? vh - oldVh : 0;
+  if (dy) {
+    for (const b of buildings) b.top += dy;
+    for (const b of midBldgs) b.top += dy;
+    for (const b of farBldgs) b.top += dy;
+    for (const f of furniture) f.y += dy;
+    for (const s of sitSpots) s.y += dy;
+    for (const p of people) p.y += dy;
+    for (const g of pigeons) g.y += dy;
+    for (const s of steam) s.y += dy;
+  }
 }
 
 /* set the transform for a parallax layer: integer part of the offset is
@@ -149,6 +163,8 @@ let stars = [];
 let steam = [];
 let genX = 0, midGenX = 0, farGenX = 0;
 let peopleTimer = 1;
+const LAMP_SPACING = 64;                // lamp posts on a regular grid
+let lampGenX = 0;
 
 function newCity() {
   const seed = (Math.random() * 0xffffffff) >>> 0;
@@ -160,7 +176,7 @@ function newCity() {
   camX = 0; maxCam = 0;
   buildings = []; midBldgs = []; farBldgs = [];
   furniture = []; sitSpots = []; people = []; pigeons = []; steam = [];
-  genX = -40; midGenX = -40; farGenX = -40;
+  genX = -40; midGenX = -40; farGenX = -40; lampGenX = -40;
   peopleTimer = 0.5;
   clouds = [];
   const nClouds = ri(3, 6);
@@ -544,11 +560,10 @@ function addFurniture(x0, x1) {
   while (x < x1) {
     const roll = R();
     if (roll < 0.30) furniture.push({ kind: 'tree', x, y: curbY - 1, leaf: tinted(pick(['#3f7d3a','#4c8a42','#5a8a3a','#35703c'])), leaf2: tinted('#2c5c30'), tw: rf(0, 6.28), fw: ri(9, 13), fh: ri(8, 12), th: ri(6, 9) });
-    else if (roll < 0.52) furniture.push({ kind: 'lamp', x, y: curbY - 1 });
-    else if (roll < 0.62) furniture.push({ kind: 'hydrant', x, y: curbY - 2 });
-    else if (roll < 0.72) furniture.push({ kind: 'can', x, y: curbY - 2 });
-    else if (roll < 0.78) furniture.push({ kind: 'mailbox', x, y: curbY - 2 });
-    else if (roll < 0.86) furniture.push({ kind: 'manhole', x, y: vh - ri(3, 9), t: rf(0, 9) });
+    else if (roll < 0.40) furniture.push({ kind: 'hydrant', x, y: curbY - 2 });
+    else if (roll < 0.50) furniture.push({ kind: 'can', x, y: curbY - 2 });
+    else if (roll < 0.56) furniture.push({ kind: 'mailbox', x, y: curbY - 2 });
+    else if (roll < 0.64) furniture.push({ kind: 'manhole', x, y: vh - ri(3, 9), t: rf(0, 9) });
     x += ri(18, 42);
   }
   if (chance(.22)) {
@@ -850,6 +865,10 @@ function generate() {
     const b = makeSilhouette(farGenX, 'far');
     farBldgs.push(b);
     farGenX += b.w + ri(0, 2);
+  }
+  while (lampGenX < ahead) {                 // evenly spaced lamp posts
+    furniture.push({ kind: 'lamp', x: lampGenX, y: curbY - 1 });
+    lampGenX += LAMP_SPACING;
   }
   const cut = camX - vw * 1.6;
   buildings = buildings.filter(b => b.x + b.w > cut);
